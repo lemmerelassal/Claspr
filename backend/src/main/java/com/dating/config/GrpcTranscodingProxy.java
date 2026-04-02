@@ -131,6 +131,14 @@ public class GrpcTranscodingProxy {
         if (body.containsKey("max_distance_km")) user.maxDistanceKm = intVal(body, "max_distance_km");
         if (body.containsKey("min_age_preference")) user.minAgePreference = intVal(body, "min_age_preference");
         if (body.containsKey("max_age_preference")) user.maxAgePreference = intVal(body, "max_age_preference");
+        if (body.containsKey("weight")) user.weight = dblVal(body, "weight");
+        if (body.containsKey("weight_unit")) user.weightUnit = str(body, "weight_unit");
+        if (body.containsKey("height")) user.height = dblVal(body, "height");
+        if (body.containsKey("height_unit")) user.heightUnit = str(body, "height_unit");
+        if (body.containsKey("min_weight_preference")) user.minWeightPreference = dblVal(body, "min_weight_preference");
+        if (body.containsKey("max_weight_preference")) user.maxWeightPreference = dblVal(body, "max_weight_preference");
+        if (body.containsKey("min_height_preference")) user.minHeightPreference = dblVal(body, "min_height_preference");
+        if (body.containsKey("max_height_preference")) user.maxHeightPreference = dblVal(body, "max_height_preference");
         if (body.containsKey("interests")) {
             user.interests.clear();
             @SuppressWarnings("unchecked")
@@ -316,6 +324,14 @@ public class GrpcTranscodingProxy {
         m.put("min_age_preference", u.minAgePreference != null ? u.minAgePreference : 18);
         m.put("max_age_preference", u.maxAgePreference != null ? u.maxAgePreference : 99);
         m.put("gender_preference", u.genderPreference != null ? u.genderPreference.name() : "");
+        m.put("weight", u.weight != null ? u.weight : 0);
+        m.put("weight_unit", u.weightUnit != null ? u.weightUnit : "kg");
+        m.put("height", u.height != null ? u.height : 0);
+        m.put("height_unit", u.heightUnit != null ? u.heightUnit : "cm");
+        m.put("min_weight_preference", u.minWeightPreference != null ? u.minWeightPreference : 0);
+        m.put("max_weight_preference", u.maxWeightPreference != null ? u.maxWeightPreference : 0);
+        m.put("min_height_preference", u.minHeightPreference != null ? u.minHeightPreference : 0);
+        m.put("max_height_preference", u.maxHeightPreference != null ? u.maxHeightPreference : 0);
         return m;
     }
 

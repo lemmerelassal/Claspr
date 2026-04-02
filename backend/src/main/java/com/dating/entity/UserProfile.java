@@ -46,6 +46,22 @@ public class UserProfile extends PanacheEntityBase {
     public Integer minAgePreference = 18;
     public Integer maxAgePreference = 99;
 
+    // Weight stored in kg internally
+    public Double weight;
+    public String weightUnit = "kg"; // "kg" or "lb"
+
+    // Height stored in cm internally
+    public Double height;
+    public String heightUnit = "cm"; // "cm" or "ft"
+
+    // Filter preferences for weight (stored in kg)
+    public Double minWeightPreference;
+    public Double maxWeightPreference;
+
+    // Filter preferences for height (stored in cm)
+    public Double minHeightPreference;
+    public Double maxHeightPreference;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_photos", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "photo_url")

@@ -97,7 +97,6 @@ export class GrpcClientService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
       },
       body: JSON.stringify(payload),
     });
@@ -340,6 +339,14 @@ export interface ProfileUpdate {
   max_age_preference?: number;
   photo_urls?: string[];
   interests?: string[];
+  weight?: number;
+  weight_unit?: string;
+  height?: number;
+  height_unit?: string;
+  min_weight_preference?: number;
+  max_weight_preference?: number;
+  min_height_preference?: number;
+  max_height_preference?: number;
 }
 
 export interface ProfileCard {

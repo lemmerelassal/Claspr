@@ -1,7 +1,7 @@
 import { Routes, CanActivateFn } from '@angular/router';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { AuthComponent, DiscoverComponent, MatchesComponent, ChatComponent, ProfileComponent } from './app.component';
+import { AuthComponent, DiscoverComponent, MatchesComponent, ChatComponent, ProfileComponent, SettingsComponent } from './app.component';
 import { GrpcClientService } from './services/grpc-client.service';
 
 // Functional guard — no separate file needed
@@ -20,5 +20,6 @@ export const routes: Routes = [
   { path: 'matches', component: MatchesComponent, canActivate: [authGuard] },
   { path: 'chat/:matchId', component: ChatComponent, canActivate: [authGuard] },
   { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
+  { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '/discover' }
 ];

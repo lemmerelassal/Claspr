@@ -317,7 +317,7 @@ export class AuthComponent {
         <div class="match-content" @matchPop>
           <h2>It's a Match! 🎉</h2>
           <p>You and {{ matchedProfile.display_name }} liked each other</p>
-          <img [src]="matchedProfile.photo_urls[0]" class="match-photo" />
+          <img [src]="resolveMatchPhoto()" class="match-photo" />
           <div class="match-actions">
             <button class="btn-message" (click)="goToChat($event)">Send Message</button>
             <button class="btn-later" (click)="dismissMatch()">Keep Swiping</button>
@@ -390,6 +390,13 @@ export class DiscoverComponent implements OnInit {
   buttonSwipe(dir: string): void { if (this.profiles.length > 0) this.onSwipe(dir, this.profiles[0]); }
   dismissMatch(): void { this.matchedProfile = null; }
   goToChat(e: Event): void { e.stopPropagation(); if (this.matchId) this.router.navigate(['/chat', this.matchId]); this.matchedProfile = null; }
+
+  resolveMatchPhoto(): string {
+    if (!this.matchedProfile) return 'https://via.placeholder.com/120?text=?';
+    const url = this.matchedProfile.photo_urls?.[0];
+    if (!url) return 'https://via.placeholder.com/120?text=?';
+    return this.grpc.resolvePhotoUrl(url);
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -409,14 +416,14 @@ export class DiscoverComponent implements OnInit {
         <h3>New Matches</h3>
         <div class="match-circles">
           <a *ngFor="let m of newMatches" [routerLink]="['/chat', m.match_id]" class="match-circle">
-            <img [src]="m.profile.photo_urls[0]" [alt]="m.profile.display_name" (error)="onImgError($event)" />
+            <img [src]="resolvePhoto(m.profile.photo_urls[0])" [alt]="m.profile.display_name" (error)="onImgError($event)" />
             <span>{{ m.profile.display_name }}</span>
           </a>
         </div>
       </div>
       <div class="conversations">
         <a *ngFor="let m of conversations" [routerLink]="['/chat', m.match_id]" class="convo-row">
-          <img [src]="m.profile.photo_urls[0]" class="convo-avatar" (error)="onImgError($event)" />
+          <img [src]="resolvePhoto(m.profile.photo_urls[0])" class="convo-avatar" (error)="onImgError($event)" />
           <div class="convo-info">
             <div class="convo-name">{{ m.profile.display_name }}</div>
             <div class="convo-last" *ngIf="m.last_message">
@@ -469,6 +476,7 @@ export class MatchesComponent implements OnInit {
   }
 
   onImgError(e: Event): void { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/64?text=?'; }
+  resolvePhoto(url: string): string { return this.grpc.resolvePhotoUrl(url); }
   formatTime(iso: string): string {
     const d = new Date(iso); const diff = Date.now() - d.getTime();
     if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
@@ -586,26 +594,33 @@ export class ChatComponent implements OnInit {
         <div class="hero-overlay">
           <h2>{{ profile.display_name }}, {{ profile.age }}</h2>
           <p *ngIf="profile.city">📍 {{ profile.city }}</p>
-          <div class="proto-badge">ProfileService via gRPC</div>
         </div>
       </div>
 
-      <!-- Photo Manager -->
+      <!-- Photo Manager (Drag & Drop) -->
       <div class="profile-section">
-        <h3>Photos</h3>
+        <h3>Photos <span class="drag-hint">Drag to reorder</span></h3>
         <div class="photo-grid">
-          <div class="photo-slot" *ngFor="let url of profile.photo_urls; let i = index"
-               (click)="setMainPhoto(i)"
-               [class.main]="i === 0">
-            <img [src]="resolvePhoto(url)" (error)="onImgError($event)" />
+          <div class="photo-slot"
+               *ngFor="let url of profile.photo_urls; let i = index"
+               [class.main]="i === 0"
+               [class.dragging]="dragIndex === i"
+               [class.drag-over]="dragOverIndex === i"
+               draggable="true"
+               (dragstart)="onDragStart(i, $event)"
+               (dragend)="onDragEnd()"
+               (dragover)="onDragOver(i, $event)"
+               (dragleave)="onDragLeave()"
+               (drop)="onDrop(i, $event)">
+            <img [src]="resolvePhoto(url)" (error)="onImgError($event)" draggable="false" />
             <div class="photo-badge" *ngIf="i === 0">Main</div>
-            <button class="photo-delete" (click)="deletePhoto(i, $event)" title="Remove photo">×</button>
-            <div class="photo-move" *ngIf="i > 0">
-              <button (click)="movePhoto(i, i-1, $event)" title="Move left">◀</button>
+            <div class="photo-number">{{ i + 1 }}</div>
+            <button class="photo-delete" (click)="deletePhoto(i, $event)">×</button>
+            <div class="drag-handle">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
             </div>
           </div>
 
-          <!-- Upload slot -->
           <label class="photo-slot upload-slot" *ngIf="profile.photo_urls.length < 6">
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif"
                    (change)="onFileSelected($event)" hidden />
@@ -625,6 +640,34 @@ export class ChatComponent implements OnInit {
         <h3>About</h3>
         <textarea [(ngModel)]="bio" rows="3" placeholder="Tell people about yourself..."></textarea>
       </div>
+
+      <!-- Weight & Height -->
+      <div class="profile-section">
+        <h3>Body</h3>
+        <div class="body-row">
+          <div class="body-field">
+            <label>Weight</label>
+            <div class="input-with-unit">
+              <input type="number" [(ngModel)]="weightDisplay" placeholder="0" min="0" step="0.1" />
+              <select [(ngModel)]="weightUnit" (ngModelChange)="onWeightUnitChange()">
+                <option value="kg">kg</option>
+                <option value="lb">lb</option>
+              </select>
+            </div>
+          </div>
+          <div class="body-field">
+            <label>Height</label>
+            <div class="input-with-unit">
+              <input type="number" [(ngModel)]="heightDisplay" placeholder="0" min="0" step="0.01" />
+              <select [(ngModel)]="heightUnit" (ngModelChange)="onHeightUnitChange()">
+                <option value="cm">cm</option>
+                <option value="ft">ft</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="profile-section">
         <h3>Interests</h3>
         <div class="interest-tags">
@@ -637,95 +680,63 @@ export class ChatComponent implements OnInit {
           <input type="text" [(ngModel)]="newInterest" placeholder="Add interest..." (keydown.enter)="addInterest()"/>
         </div>
       </div>
-      <div class="profile-section">
-        <h3>Discovery Settings</h3>
-        <label>Max Distance: {{ maxDistance }} km</label>
-        <input type="range" [(ngModel)]="maxDistance" min="5" max="200" class="slider" />
-        <label>Age Range: {{ minAge }} – {{ maxAge }}</label>
-        <div class="range-group">
-          <input type="range" [(ngModel)]="minAge" min="18" max="80" class="slider" />
-          <input type="range" [(ngModel)]="maxAge" min="18" max="80" class="slider" />
-        </div>
-      </div>
-      <button class="btn-save" (click)="saveProfile()">{{ saving ? 'Calling UpdateProfile...' : 'Save Changes' }}</button>
+
+      <button class="btn-save" (click)="saveProfile()">{{ saving ? 'Saving...' : 'Save Changes' }}</button>
       <button class="btn-logout" (click)="logout()">Log Out</button>
     </div>
   `,
   styles: [`
     .profile-page { min-height:100vh; background:#0f0c29; color:#fff; padding-bottom:100px; }
-    .profile-header { position:relative; height:300px; overflow:hidden; }
+    .profile-header { position:relative; height:280px; overflow:hidden; }
     .profile-hero { width:100%; height:100%; object-fit:cover; }
     .hero-overlay { position:absolute; bottom:0; left:0; right:0; padding:24px; background:linear-gradient(transparent,rgba(15,12,41,0.95)); }
     .hero-overlay h2 { font-size:1.6rem; margin:0; }
-    .hero-overlay p { color:rgba(255,255,255,0.6); margin:4px 0 8px; }
-    .proto-badge { display:inline-block; padding:3px 10px; background:rgba(0,176,255,0.15); border:1px solid rgba(0,176,255,0.3); border-radius:6px; font-size:0.65rem; font-weight:600; color:#00b0ff; }
+    .hero-overlay p { color:rgba(255,255,255,0.6); margin:4px 0 0; }
     .profile-section { padding:20px 16px; border-bottom:1px solid rgba(255,255,255,0.06); }
     .profile-section h3 { font-size:0.85rem; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.5); margin-bottom:12px; }
-
     .photo-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
-    .photo-slot {
-      position:relative; aspect-ratio:3/4; border-radius:12px; overflow:hidden;
-      border:2px solid rgba(255,255,255,0.1); cursor:pointer; transition:border-color 0.2s;
-    }
-    .photo-slot:hover { border-color:rgba(238,90,36,0.5); }
+    .photo-slot { position:relative; aspect-ratio:3/4; border-radius:12px; overflow:hidden; border:2px solid rgba(255,255,255,0.1); cursor:grab; transition:all 0.2s; }
+    .photo-slot:active { cursor:grabbing; }
     .photo-slot.main { border-color:#EE5A24; }
-    .photo-slot img { width:100%; height:100%; object-fit:cover; }
-    .photo-badge {
-      position:absolute; top:6px; left:6px; padding:2px 8px;
-      background:linear-gradient(135deg,#EE5A24,#FF6B6B); border-radius:4px;
-      font-size:0.65rem; font-weight:700; color:#fff;
-    }
-    .photo-delete {
-      position:absolute; top:6px; right:6px; width:24px; height:24px;
-      border-radius:50%; border:none; background:rgba(0,0,0,0.6);
-      color:#ff5252; font-size:1rem; cursor:pointer; display:flex;
-      align-items:center; justify-content:center; opacity:0; transition:opacity 0.2s;
-    }
+    .photo-slot.dragging { opacity:0.3; transform:scale(0.95); }
+    .photo-slot.drag-over { border-color:#00b0ff; border-style:dashed; transform:scale(1.03); box-shadow:0 0 20px rgba(0,176,255,0.3); }
+    .photo-slot img { width:100%; height:100%; object-fit:cover; pointer-events:none; }
+    .photo-badge { position:absolute; top:6px; left:6px; padding:2px 8px; background:linear-gradient(135deg,#EE5A24,#FF6B6B); border-radius:4px; font-size:0.65rem; font-weight:700; }
+    .photo-number { position:absolute; bottom:6px; left:6px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; }
+    .photo-delete { position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%; border:none; background:rgba(0,0,0,0.6); color:#ff5252; font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.2s; z-index:2; }
     .photo-slot:hover .photo-delete { opacity:1; }
-    .photo-move {
-      position:absolute; bottom:6px; left:6px; opacity:0; transition:opacity 0.2s;
-    }
-    .photo-slot:hover .photo-move { opacity:1; }
-    .photo-move button {
-      padding:2px 6px; border-radius:4px; border:none;
-      background:rgba(0,0,0,0.6); color:#fff; font-size:0.7rem; cursor:pointer;
-    }
-
-    .upload-slot {
-      display:flex; align-items:center; justify-content:center;
-      border:2px dashed rgba(255,255,255,0.2); background:rgba(255,255,255,0.03);
-      cursor:pointer; transition:all 0.2s;
-    }
-    .upload-slot:hover { border-color:#EE5A24; background:rgba(238,90,36,0.05); }
+    .drag-handle { position:absolute; bottom:6px; right:6px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.5); opacity:0; transition:opacity 0.2s; }
+    .photo-slot:hover .drag-handle { opacity:1; }
+    .drag-hint { font-size:0.7rem; font-weight:400; color:rgba(255,255,255,0.3); text-transform:none; letter-spacing:0; margin-left:8px; }
+    .upload-slot { display:flex; align-items:center; justify-content:center; border:2px dashed rgba(255,255,255,0.2); background:rgba(255,255,255,0.03); }
     .upload-content { display:flex; flex-direction:column; align-items:center; gap:6px; color:rgba(255,255,255,0.4); }
     .upload-content span { font-size:0.75rem; }
     .upload-status { margin-top:10px; font-size:0.85rem; color:#00b0ff; }
     .upload-error { margin-top:10px; font-size:0.85rem; color:#ff5252; }
-
+    .body-row { display:flex; gap:16px; }
+    .body-field { flex:1; }
+    .body-field label { display:block; font-size:0.85rem; color:rgba(255,255,255,0.6); margin-bottom:6px; }
+    .input-with-unit { display:flex; gap:0; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); }
+    .input-with-unit input { flex:1; padding:12px; background:rgba(255,255,255,0.06); border:none; color:#fff; font-size:0.95rem; outline:none; min-width:0; }
+    .input-with-unit select { padding:8px 12px; background:rgba(255,255,255,0.1); border:none; border-left:1px solid rgba(255,255,255,0.1); color:#fff; font-size:0.85rem; outline:none; cursor:pointer; }
+    .input-with-unit select option { background:#1a1a2e; }
     textarea,.add-interest input { width:100%; padding:12px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:#fff; font-size:0.95rem; resize:none; outline:none; box-sizing:border-box; }
     .interest-tags { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-    .tag {
-      padding:6px 14px; background:rgba(238,90,36,0.2); border:1px solid rgba(238,90,36,0.4);
-      border-radius:20px; font-size:0.85rem; display:flex; align-items:center; gap:6px;
-    }
-    .tag-remove {
-      background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer;
-      font-size:1rem; padding:0; line-height:1;
-    }
+    .tag { padding:6px 14px; background:rgba(238,90,36,0.2); border:1px solid rgba(238,90,36,0.4); border-radius:20px; font-size:0.85rem; display:flex; align-items:center; gap:6px; }
+    .tag-remove { background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:1rem; padding:0; }
     .tag-remove:hover { color:#ff5252; }
-    label { display:block; font-size:0.9rem; color:rgba(255,255,255,0.7); margin-bottom:8px; }
-    .slider { width:100%; accent-color:#EE5A24; margin-bottom:16px; }
-    .range-group { display:flex; gap:16px; }
-    .range-group .slider { flex:1; }
     .btn-save { display:block; width:calc(100% - 32px); margin:24px 16px 12px; padding:14px; background:linear-gradient(135deg,#FF6B6B,#EE5A24); border:none; border-radius:12px; color:#fff; font-weight:700; font-size:1rem; cursor:pointer; }
     .btn-logout { display:block; width:calc(100% - 32px); margin:0 16px; padding:14px; background:transparent; border:1px solid rgba(255,255,255,0.15); border-radius:12px; color:rgba(255,255,255,0.5); cursor:pointer; }
   `]
 })
 export class ProfileComponent implements OnInit {
   profile: any = null;
-  bio = ''; maxDistance = 50; minAge = 18; maxAge = 45;
-  newInterest = ''; saving = false;
+  bio = ''; newInterest = ''; saving = false;
   uploading = false; uploadError = '';
+  weightDisplay = 0; weightUnit = 'kg';
+  heightDisplay = 0; heightUnit = 'cm';
+  dragIndex: number | null = null;
+  dragOverIndex: number | null = null;
 
   constructor(private grpc: GrpcClientService, private router: Router) {}
 
@@ -733,77 +744,96 @@ export class ProfileComponent implements OnInit {
     try {
       this.profile = await this.grpc.getMyProfile();
       this.bio = this.profile.bio || '';
-      this.maxDistance = this.profile.max_distance_km || 50;
-      this.minAge = this.profile.min_age_preference || 18;
-      this.maxAge = this.profile.max_age_preference || 45;
+      this.weightUnit = this.profile.weight_unit || 'kg';
+      this.heightUnit = this.profile.height_unit || 'cm';
+      const wKg = this.profile.weight || 0;
+      this.weightDisplay = this.weightUnit === 'lb' ? Math.round(wKg * 2.20462 * 10) / 10 : wKg;
+      const hCm = this.profile.height || 0;
+      this.heightDisplay = this.heightUnit === 'ft' ? Math.round(hCm / 30.48 * 100) / 100 : hCm;
     } catch (e) { console.error('GetMyProfile failed:', e); }
   }
 
-  resolvePhoto(url: string): string {
-    return this.grpc.resolvePhotoUrl(url);
+  resolvePhoto(url: string): string { return this.grpc.resolvePhotoUrl(url); }
+
+  // ── Drag & Drop ──────────────────────────────────────
+  onDragStart(index: number, event: DragEvent): void {
+    this.dragIndex = index;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', index.toString());
+      // Make the drag image slightly transparent
+      const el = event.target as HTMLElement;
+      setTimeout(() => el.style.opacity = '0.3', 0);
+    }
   }
 
-  // ── Photo Upload ─────────────────────────────────────
+  onDragEnd(): void {
+    this.dragIndex = null;
+    this.dragOverIndex = null;
+  }
+
+  onDragOver(index: number, event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    if (this.dragIndex !== null && this.dragIndex !== index) {
+      this.dragOverIndex = index;
+    }
+  }
+
+  onDragLeave(): void {
+    this.dragOverIndex = null;
+  }
+
+  async onDrop(targetIndex: number, event: DragEvent): Promise<void> {
+    event.preventDefault();
+    this.dragOverIndex = null;
+    if (this.dragIndex === null || this.dragIndex === targetIndex) return;
+
+    const urls = [...this.profile.photo_urls];
+    const [moved] = urls.splice(this.dragIndex, 1);
+    urls.splice(targetIndex, 0, moved);
+    this.dragIndex = null;
+
+    // Update UI immediately for responsiveness
+    this.profile.photo_urls = urls;
+
+    // Persist to backend
+    try { await this.grpc.reorderPhotos(urls); }
+    catch (e) { console.error('Reorder failed:', e); }
+  }
+
+  onWeightUnitChange(): void {
+    if (this.weightUnit === 'lb') {
+      this.weightDisplay = Math.round(this.weightDisplay * 2.20462 * 10) / 10;
+    } else {
+      this.weightDisplay = Math.round(this.weightDisplay / 2.20462 * 10) / 10;
+    }
+  }
+
+  onHeightUnitChange(): void {
+    if (this.heightUnit === 'ft') {
+      this.heightDisplay = Math.round(this.heightDisplay / 30.48 * 100) / 100;
+    } else {
+      this.heightDisplay = Math.round(this.heightDisplay * 30.48 * 10) / 10;
+    }
+  }
+
   async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
-
-    const file = input.files[0];
-    if (file.size > 10 * 1024 * 1024) {
-      this.uploadError = 'File too large. Maximum 10MB.';
-      return;
-    }
-
-    this.uploading = true;
-    this.uploadError = '';
+    this.uploading = true; this.uploadError = '';
     try {
-      const result = await this.grpc.uploadPhoto(file);
+      const result = await this.grpc.uploadPhoto(input.files[0]);
       this.profile.photo_urls = result.photo_urls;
-    } catch (e: any) {
-      this.uploadError = e.message || 'Upload failed';
-    } finally {
-      this.uploading = false;
-      input.value = '';
-    }
+    } catch (e: any) { this.uploadError = e.message || 'Upload failed'; }
+    finally { this.uploading = false; input.value = ''; }
   }
 
-  // ── Photo Delete ─────────────────────────────────────
   async deletePhoto(index: number, event: Event): Promise<void> {
     event.stopPropagation();
-    if (this.profile.photo_urls.length <= 1) {
-      this.uploadError = 'You need at least one photo.';
-      return;
-    }
-    try {
-      const result = await this.grpc.deletePhoto(index);
-      this.profile.photo_urls = result.photo_urls;
-    } catch (e: any) {
-      this.uploadError = e.message || 'Delete failed';
-    }
-  }
-
-  // ── Set Main Photo (move to index 0) ─────────────────
-  async setMainPhoto(index: number): Promise<void> {
-    if (index === 0) return;
-    const urls = [...this.profile.photo_urls];
-    const [moved] = urls.splice(index, 1);
-    urls.unshift(moved);
-    try {
-      await this.grpc.reorderPhotos(urls);
-      this.profile.photo_urls = urls;
-    } catch (e) { console.error('Reorder failed:', e); }
-  }
-
-  // ── Move Photo ───────────────────────────────────────
-  async movePhoto(from: number, to: number, event: Event): Promise<void> {
-    event.stopPropagation();
-    const urls = [...this.profile.photo_urls];
-    const [moved] = urls.splice(from, 1);
-    urls.splice(to, 0, moved);
-    try {
-      await this.grpc.reorderPhotos(urls);
-      this.profile.photo_urls = urls;
-    } catch (e) { console.error('Reorder failed:', e); }
+    if (this.profile.photo_urls.length <= 1) { this.uploadError = 'You need at least one photo.'; return; }
+    try { const r = await this.grpc.deletePhoto(index); this.profile.photo_urls = r.photo_urls; }
+    catch (e: any) { this.uploadError = e.message; }
   }
 
   addInterest(): void {
@@ -814,20 +844,22 @@ export class ProfileComponent implements OnInit {
   }
 
   removeInterest(index: number): void {
-    if (this.profile?.interests) {
-      this.profile.interests = this.profile.interests.filter((_: any, i: number) => i !== index);
-    }
+    if (this.profile?.interests) this.profile.interests = this.profile.interests.filter((_: any, i: number) => i !== index);
   }
 
   async saveProfile(): Promise<void> {
     this.saving = true;
+    // Convert display values to storage units (kg, cm)
+    const weightKg = this.weightUnit === 'lb' ? this.weightDisplay / 2.20462 : this.weightDisplay;
+    const heightCm = this.heightUnit === 'ft' ? this.heightDisplay * 30.48 : this.heightDisplay;
     try {
       await this.grpc.updateProfile({
         bio: this.bio,
-        max_distance_km: this.maxDistance,
-        min_age_preference: this.minAge,
-        max_age_preference: this.maxAge,
-        interests: this.profile?.interests || []
+        interests: this.profile?.interests || [],
+        weight: Math.round(weightKg * 10) / 10,
+        weight_unit: this.weightUnit,
+        height: Math.round(heightCm * 10) / 10,
+        height_unit: this.heightUnit,
       });
     } catch (e) { console.error('UpdateProfile failed:', e); }
     finally { this.saving = false; }
@@ -838,7 +870,168 @@ export class ProfileComponent implements OnInit {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// NAVBAR
+// SETTINGS PAGE (Discovery preferences)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@Component({
+  selector: 'app-settings',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  template: `
+    <div class="settings-page">
+      <h2>Discovery Settings</h2>
+
+      <div class="setting-section">
+        <div class="setting-label">
+          <span>Max Distance</span>
+          <span class="setting-value">{{ maxDistance }} km</span>
+        </div>
+        <input type="range" [(ngModel)]="maxDistance" min="5" max="200" class="slider" />
+      </div>
+
+      <div class="setting-section">
+        <div class="setting-label">
+          <span>Age Range</span>
+          <span class="setting-value">{{ minAge }} – {{ maxAge }}</span>
+        </div>
+        <div class="dual-range">
+          <label>Min</label>
+          <input type="range" [(ngModel)]="minAge" min="18" [max]="maxAge" class="slider" />
+          <label>Max</label>
+          <input type="range" [(ngModel)]="maxAge" [min]="minAge" max="80" class="slider" />
+        </div>
+      </div>
+
+      <div class="setting-section">
+        <div class="setting-label">
+          <span>Weight Range</span>
+          <span class="setting-value">
+            {{ minWeightDisplay || 'Any' }}{{ minWeightDisplay ? ' – ' : '' }}{{ maxWeightDisplay || '' }}{{ (minWeightDisplay || maxWeightDisplay) ? (' ' + weightPrefUnit) : '' }}
+          </span>
+        </div>
+        <div class="unit-toggle">
+          <button [class.active]="weightPrefUnit === 'kg'" (click)="weightPrefUnit = 'kg'; convertWeightPref()">kg</button>
+          <button [class.active]="weightPrefUnit === 'lb'" (click)="weightPrefUnit = 'lb'; convertWeightPref()">lb</button>
+        </div>
+        <div class="dual-range">
+          <label>Min</label>
+          <input type="range" [(ngModel)]="minWeightDisplay" min="0" [max]="maxWeightDisplay || 200" class="slider" />
+          <label>Max</label>
+          <input type="range" [(ngModel)]="maxWeightDisplay" [min]="minWeightDisplay || 0" max="200" class="slider" />
+        </div>
+      </div>
+
+      <div class="setting-section">
+        <div class="setting-label">
+          <span>Height Range</span>
+          <span class="setting-value">
+            {{ minHeightDisplay || 'Any' }}{{ minHeightDisplay ? ' – ' : '' }}{{ maxHeightDisplay || '' }}{{ (minHeightDisplay || maxHeightDisplay) ? (' ' + heightPrefUnit) : '' }}
+          </span>
+        </div>
+        <div class="unit-toggle">
+          <button [class.active]="heightPrefUnit === 'cm'" (click)="heightPrefUnit = 'cm'; convertHeightPref()">cm</button>
+          <button [class.active]="heightPrefUnit === 'ft'" (click)="heightPrefUnit = 'ft'; convertHeightPref()">ft</button>
+        </div>
+        <div class="dual-range">
+          <label>Min</label>
+          <input type="range" [(ngModel)]="minHeightDisplay" min="0" [max]="maxHeightDisplay || (heightPrefUnit === 'cm' ? 220 : 7.5)" [step]="heightPrefUnit === 'ft' ? 0.1 : 1" class="slider" />
+          <label>Max</label>
+          <input type="range" [(ngModel)]="maxHeightDisplay" [min]="minHeightDisplay || 0" [max]="heightPrefUnit === 'cm' ? 220 : 7.5" [step]="heightPrefUnit === 'ft' ? 0.1 : 1" class="slider" />
+        </div>
+      </div>
+
+      <button class="btn-save" (click)="saveSettings()">{{ saving ? 'Saving...' : 'Save Settings' }}</button>
+    </div>
+  `,
+  styles: [`
+    .settings-page { min-height:calc(100vh - 60px); background:#0f0c29; color:#fff; padding:24px 16px 100px; }
+    .settings-page > h2 { font-size:1.5rem; font-weight:800; margin-bottom:24px; }
+    .setting-section { padding:16px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+    .setting-label { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .setting-label span:first-child { font-size:1rem; font-weight:600; }
+    .setting-value { font-size:0.9rem; color:#EE5A24; font-weight:500; }
+    .slider { width:100%; accent-color:#EE5A24; margin:4px 0; }
+    .dual-range { display:flex; align-items:center; gap:8px; }
+    .dual-range label { font-size:0.75rem; color:rgba(255,255,255,0.4); min-width:28px; }
+    .dual-range .slider { flex:1; }
+    .unit-toggle { display:flex; gap:0; margin-bottom:10px; background:rgba(255,255,255,0.05); border-radius:8px; overflow:hidden; width:fit-content; }
+    .unit-toggle button { padding:6px 16px; border:none; background:transparent; color:rgba(255,255,255,0.4); font-size:0.85rem; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .unit-toggle button.active { background:rgba(238,90,36,0.3); color:#EE5A24; }
+    .btn-save { display:block; width:100%; margin-top:24px; padding:14px; background:linear-gradient(135deg,#FF6B6B,#EE5A24); border:none; border-radius:12px; color:#fff; font-weight:700; font-size:1rem; cursor:pointer; }
+  `]
+})
+export class SettingsComponent implements OnInit {
+  maxDistance = 50; minAge = 18; maxAge = 45;
+  weightPrefUnit = 'kg'; heightPrefUnit = 'cm';
+  minWeightDisplay = 0; maxWeightDisplay = 0;
+  minHeightDisplay = 0; maxHeightDisplay = 0;
+  saving = false;
+  private profile: any = null;
+
+  constructor(private grpc: GrpcClientService) {}
+
+  async ngOnInit(): Promise<void> {
+    try {
+      this.profile = await this.grpc.getMyProfile();
+      this.maxDistance = this.profile.max_distance_km || 50;
+      this.minAge = this.profile.min_age_preference || 18;
+      this.maxAge = this.profile.max_age_preference || 45;
+      // Weight prefs (stored in kg)
+      const minW = this.profile.min_weight_preference || 0;
+      const maxW = this.profile.max_weight_preference || 0;
+      this.minWeightDisplay = minW;
+      this.maxWeightDisplay = maxW;
+      // Height prefs (stored in cm)
+      const minH = this.profile.min_height_preference || 0;
+      const maxH = this.profile.max_height_preference || 0;
+      this.minHeightDisplay = minH;
+      this.maxHeightDisplay = maxH;
+    } catch (e) { console.error('GetMyProfile failed:', e); }
+  }
+
+  convertWeightPref(): void {
+    if (this.weightPrefUnit === 'lb') {
+      this.minWeightDisplay = Math.round(this.minWeightDisplay * 2.20462);
+      this.maxWeightDisplay = Math.round(this.maxWeightDisplay * 2.20462);
+    } else {
+      this.minWeightDisplay = Math.round(this.minWeightDisplay / 2.20462);
+      this.maxWeightDisplay = Math.round(this.maxWeightDisplay / 2.20462);
+    }
+  }
+
+  convertHeightPref(): void {
+    if (this.heightPrefUnit === 'ft') {
+      this.minHeightDisplay = Math.round(this.minHeightDisplay / 30.48 * 10) / 10;
+      this.maxHeightDisplay = Math.round(this.maxHeightDisplay / 30.48 * 10) / 10;
+    } else {
+      this.minHeightDisplay = Math.round(this.minHeightDisplay * 30.48);
+      this.maxHeightDisplay = Math.round(this.maxHeightDisplay * 30.48);
+    }
+  }
+
+  async saveSettings(): Promise<void> {
+    this.saving = true;
+    // Convert to storage units (kg, cm)
+    const minWKg = this.weightPrefUnit === 'lb' ? this.minWeightDisplay / 2.20462 : this.minWeightDisplay;
+    const maxWKg = this.weightPrefUnit === 'lb' ? this.maxWeightDisplay / 2.20462 : this.maxWeightDisplay;
+    const minHCm = this.heightPrefUnit === 'ft' ? this.minHeightDisplay * 30.48 : this.minHeightDisplay;
+    const maxHCm = this.heightPrefUnit === 'ft' ? this.maxHeightDisplay * 30.48 : this.maxHeightDisplay;
+    try {
+      await this.grpc.updateProfile({
+        max_distance_km: this.maxDistance,
+        min_age_preference: this.minAge,
+        max_age_preference: this.maxAge,
+        min_weight_preference: Math.round(minWKg * 10) / 10,
+        max_weight_preference: Math.round(maxWKg * 10) / 10,
+        min_height_preference: Math.round(minHCm),
+        max_height_preference: Math.round(maxHCm),
+      });
+    } catch (e) { console.error('UpdateProfile failed:', e); }
+    finally { this.saving = false; }
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// NAVBAR (4 tabs: Discover, Matches, Profile, Settings)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 @Component({
   selector: 'app-navbar',
@@ -847,22 +1040,26 @@ export class ProfileComponent implements OnInit {
   template: `
     <nav class="navbar" *ngIf="show">
       <a routerLink="/discover" routerLinkActive="active" class="nav-item">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
         <span>Discover</span>
       </a>
       <a routerLink="/matches" routerLinkActive="active" class="nav-item">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
         <span>Matches</span>
       </a>
       <a routerLink="/profile" routerLinkActive="active" class="nav-item">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
         <span>Profile</span>
+      </a>
+      <a routerLink="/settings" routerLinkActive="active" class="nav-item">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.6 3.6 0 0112 15.6z"/></svg>
+        <span>Settings</span>
       </a>
     </nav>
   `,
   styles: [`
     .navbar { position:fixed; bottom:0; left:0; right:0; display:flex; justify-content:space-around; background:rgba(15,12,41,0.95); backdrop-filter:blur(10px); border-top:1px solid rgba(255,255,255,0.06); padding:8px 0 env(safe-area-inset-bottom,8px); z-index:100; }
-    .nav-item { display:flex; flex-direction:column; align-items:center; gap:4px; text-decoration:none; color:rgba(255,255,255,0.4); font-size:0.7rem; padding:6px 16px; transition:color 0.2s; }
+    .nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; text-decoration:none; color:rgba(255,255,255,0.4); font-size:0.65rem; padding:6px 12px; transition:color 0.2s; }
     .nav-item.active { color:#EE5A24; }
   `]
 })
