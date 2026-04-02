@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dating
+      POSTGRES_PASSWORD: dating123
+      POSTGRES_DB: datingdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dating"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+      - "9000:9000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: datingdb
+      DB_USER: dating
+      DB_PASSWORD: dating123
+      FRONTEND_URL: http://localhost:4200
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

@@ -1,0 +1,151 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: dating-gateway
+  namespace: dating-app
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "claspr.app"
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - "claspr.app"
+      tls:
+        mode: SIMPLE
+        credentialName: dating-tls-cert
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dating-vs
+  namespace: dating-app
+spec:
+  hosts:
+    - "claspr.app"
+  gateways:
+    - dating-gateway
+  http:
+    # ── gRPC-Web traffic → backend gRPC port ────────────
+    # Browsers send gRPC-Web as POST with content-type: application/grpc-web
+    - match:
+        - headers:
+            content-type:
+              prefix: application/grpc-web
+      route:
+        - destination:
+            host: backend
+            port:
+              number: 9000
+      corsPolicy:
+        allowOrigins:
+          - regex: ".*"
+        allowMethods:
+          - POST
+          - OPTIONS
+        allowHeaders:
+          - content-type
+          - x-grpc-web
+          - x-user-agent
+          - grpc-timeout
+          - authorization
+        exposeHeaders:
+          - grpc-status
+          - grpc-message
+          - grpc-encoding
+        maxAge: "86400"
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: unavailable,resource-exhausted
+
+    # ── Native gRPC traffic → backend gRPC port ────────
+    - match:
+        - headers:
+            content-type:
+              prefix: application/grpc
+      route:
+        - destination:
+            host: backend
+            port:
+              number: 9000
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: unavailable,resource-exhausted
+
+    # ── Minimal REST (health/info only) ─────────────────
+    - match:
+        - uri:
+            prefix: /api/
+        - uri:
+            prefix: /q/
+      route:
+        - destination:
+            host: backend
+            port:
+              number: 8080
+
+    # ── All other traffic → frontend (Angular SPA) ──────
+    - route:
+        - destination:
+            host: frontend
+            port:
+              number: 80
+
+---
+# ── Backend DestinationRule with canary subsets ─────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: backend-dr
+  namespace: dating-app
+spec:
+  host: backend
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        h2UpgradePolicy: UPGRADE
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  subsets:
+    - name: stable
+      labels:
+        version: v1
+    - name: canary
+      labels:
+        version: v2
+
+---
+# ── Frontend DestinationRule ────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: frontend-dr
+  namespace: dating-app
+spec:
+  host: frontend
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN

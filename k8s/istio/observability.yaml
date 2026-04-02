@@ -1,0 +1,86 @@
+# ── Telemetry: enable access logging & tracing ──────────
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: dating-telemetry
+  namespace: dating-app
+spec:
+  accessLogging:
+    - providers:
+        - name: envoy
+  tracing:
+    - providers:
+        - name: zipkin
+      randomSamplingPercentage: 10.0
+---
+# ── ServiceEntry for external image CDN ─────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: unsplash-images
+  namespace: dating-app
+spec:
+  hosts:
+    - images.unsplash.com
+  ports:
+    - number: 443
+      name: https
+      protocol: TLS
+  resolution: DNS
+  location: MESH_EXTERNAL
+---
+# ── Network Policy (K8s layer, defense in depth) ────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-netpol
+  namespace: dating-app
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - port: 8080
+        - port: 9000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - port: 5432
+    - to:  # DNS
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-netpol
+  namespace: dating-app
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 5432

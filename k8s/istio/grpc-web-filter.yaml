@@ -1,0 +1,94 @@
+# ── gRPC-Web Envoy Filter ───────────────────────────────
+# This filter enables browsers to talk gRPC-Web to the backend.
+# Istio's Envoy sidecar translates gRPC-Web ↔ native gRPC automatically.
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: grpc-web-filter
+  namespace: dating-app
+spec:
+  workloadSelector:
+    labels:
+      app: backend
+  configPatches:
+    # Insert gRPC-Web filter before the gRPC router
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          portNumber: 9000
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+              subFilter:
+                name: envoy.filters.http.router
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.grpc_web
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+
+    # Also add CORS filter for gRPC-Web preflight requests
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          portNumber: 9000
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+              subFilter:
+                name: envoy.filters.http.grpc_web
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.cors
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+
+    # Configure CORS policy on the route for gRPC port
+    - applyTo: VIRTUAL_HOST
+      match:
+        context: SIDECAR_INBOUND
+        routeConfiguration:
+          portNumber: 9000
+      patch:
+        operation: MERGE
+        value:
+          cors:
+            allow_origin_string_match:
+              - prefix: "*"
+            allow_methods: "GET, PUT, DELETE, POST, OPTIONS"
+            allow_headers: "content-type,x-grpc-web,x-user-agent,grpc-timeout,authorization"
+            expose_headers: "grpc-status,grpc-message,grpc-encoding"
+            max_age: "86400"
+
+---
+# ── gRPC-Web filter on the Istio Ingress Gateway ───────
+# This enables external browser traffic to use gRPC-Web through the gateway
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: grpc-web-gateway-filter
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+              subFilter:
+                name: envoy.filters.http.router
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.grpc_web
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
