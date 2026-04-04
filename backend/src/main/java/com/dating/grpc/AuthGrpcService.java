@@ -1,6 +1,6 @@
 package com.dating.grpc;
 
-import com.dating.service.AuthService;
+import com.dating.service.IAuthService;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.quarkus.grpc.GrpcService;
@@ -10,7 +10,7 @@ import jakarta.inject.Inject;
 public class AuthGrpcService extends AuthServiceGrpc.AuthServiceImplBase {
 
     @Inject
-    AuthService authService;
+    IAuthService authService;
 
     @Override
     public void register(RegisterRequest request, StreamObserver<AuthResponse> responseObserver) {

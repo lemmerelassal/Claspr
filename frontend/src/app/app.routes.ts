@@ -1,10 +1,14 @@
 import { Routes, CanActivateFn } from '@angular/router';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { AuthComponent, DiscoverComponent, MatchesComponent, ChatComponent, ProfileComponent, SettingsComponent } from './app.component';
 import { GrpcClientService } from './services/grpc-client.service';
+import { AuthComponent } from './components/auth/auth.component';
+import { DiscoverComponent } from './components/discover/discover.component';
+import { MatchesComponent } from './components/matches/matches.component';
+import { ChatComponent } from './components/chat/chat.component';
+import { ProfileComponent } from './components/profile/profile.component';
+import { SettingsComponent } from './components/settings/settings.component';
 
-// Functional guard — no separate file needed
 const authGuard: CanActivateFn = () => {
   const grpc = inject(GrpcClientService);
   const router = inject(Router);

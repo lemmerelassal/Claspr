@@ -1,6 +1,8 @@
 package com.dating.grpc;
 
-import com.dating.service.MatchingService;
+import com.dating.service.IDiscoveryService;
+import com.dating.service.ISwipeService;
+import com.dating.service.IMatchService;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.quarkus.grpc.GrpcService;
@@ -11,7 +13,13 @@ import java.util.UUID;
 public class MatchingGrpcService extends MatchingServiceGrpc.MatchingServiceImplBase {
 
     @Inject
-    MatchingService matchingService;
+    IDiscoveryService discoveryService;
+
+    @Inject
+    ISwipeService swipeService;
+
+    @Inject
+    IMatchService matchService;
 
     @Override
     public void getPotentialMatches(MatchRequest request, StreamObserver<MatchResponse> responseObserver) {
@@ -19,7 +27,7 @@ public class MatchingGrpcService extends MatchingServiceGrpc.MatchingServiceImpl
             UUID userId = UUID.fromString(request.getUserId());
             int limit = request.getLimit() > 0 ? request.getLimit() : 10;
 
-            var profiles = matchingService.getPotentialMatches(userId, limit);
+            var profiles = discoveryService.getPotentialMatches(userId, limit);
 
             MatchResponse.Builder builder = MatchResponse.newBuilder();
             profiles.forEach(p -> {
@@ -50,7 +58,7 @@ public class MatchingGrpcService extends MatchingServiceGrpc.MatchingServiceImpl
             UUID swipedId = UUID.fromString(request.getSwipedId());
             String direction = request.getDirection().name();
 
-            var result = matchingService.recordSwipe(swiperId, swipedId, direction);
+            var result = swipeService.recordSwipe(swiperId, swipedId, direction);
 
             SwipeResponse.Builder builder = SwipeResponse.newBuilder()
                     .setIsMatch(result.isMatch());
@@ -84,7 +92,7 @@ public class MatchingGrpcService extends MatchingServiceGrpc.MatchingServiceImpl
     public void getMatches(GetMatchesRequest request, StreamObserver<GetMatchesResponse> responseObserver) {
         try {
             UUID userId = UUID.fromString(request.getUserId());
-            var matches = matchingService.getMatches(userId);
+            var matches = matchService.getMatches(userId);
 
             GetMatchesResponse.Builder builder = GetMatchesResponse.newBuilder()
                     .setTotal(matches.size());
@@ -126,7 +134,7 @@ public class MatchingGrpcService extends MatchingServiceGrpc.MatchingServiceImpl
         try {
             UUID userId = UUID.fromString(request.getUserId());
             UUID matchId = UUID.fromString(request.getMatchId());
-            matchingService.unmatch(userId, matchId);
+            matchService.unmatch(userId, matchId);
 
             responseObserver.onNext(UnmatchResponse.newBuilder().setSuccess(true).build());
             responseObserver.onCompleted();

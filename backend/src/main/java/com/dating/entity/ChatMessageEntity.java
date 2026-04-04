@@ -54,4 +54,8 @@ public class ChatMessageEntity extends PanacheEntityBase {
     public static long countByMatchId(UUID matchId) {
         return count("match.id", matchId);
     }
+
+    public static long countUnread(UUID matchId, UUID userId) {
+        return count("match.id = ?1 AND sender.id != ?2 AND read = false", matchId, userId);
+    }
 }

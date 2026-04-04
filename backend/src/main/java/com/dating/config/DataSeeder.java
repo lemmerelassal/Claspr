@@ -1,7 +1,7 @@
 package com.dating.config;
 
 import com.dating.entity.UserProfile;
-import com.dating.service.AuthService;
+import com.dating.service.IAuthService;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -15,7 +15,7 @@ import java.util.Set;
 public class DataSeeder {
 
     @Inject
-    AuthService authService;
+    IAuthService authService;
 
     @Transactional
     void onStart(@Observes StartupEvent ev) {
