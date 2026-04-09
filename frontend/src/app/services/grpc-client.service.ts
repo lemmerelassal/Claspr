@@ -54,6 +54,12 @@ export class GrpcClientService {
     });
   }
 
+  async getProfileById(targetUserId: string): Promise<ProfileData> {
+    return this.transport.call<ProfileData>('ProfileService', 'GetProfile', {
+      user_id: this.userId, target_user_id: targetUserId
+    });
+  }
+
   // ── MatchingService RPCs ─────────────────────────────
   async discover(limit = 10): Promise<DiscoverResponse> {
     return this.transport.call<DiscoverResponse>('MatchingService', 'GetPotentialMatches', {
@@ -138,6 +144,19 @@ export class GrpcClientService {
   resolvePhotoUrl(url: string): string {
     return this.transport.resolvePhotoUrl(url);
   }
+
+  // ── SwipeHistoryService RPCs ─────────────────────────
+  async getSwipeHistory(direction = 'ALL', namePrefix = '', interest = ''): Promise<SwipeHistoryResponse> {
+    return this.transport.call<SwipeHistoryResponse>('SwipeHistoryService', 'GetHistory', {
+      user_id: this.userId, direction, name_prefix: namePrefix, interest
+    });
+  }
+
+  async autocompleteName(prefix: string): Promise<AutocompleteResponse> {
+    return this.transport.call<AutocompleteResponse>('SwipeHistoryService', 'AutocompleteName', {
+      user_id: this.userId, prefix
+    });
+  }
 }
 
 // ── Types ────────────────────────────────────────────────
@@ -196,3 +215,13 @@ export interface SendMessageResult { message_id: string; sent_at: string; delive
 export interface ConversationResult { messages: ChatMsg[]; total: number; }
 export interface PhotoUploadResult { url: string; photo_urls: string[]; total_photos: number; }
 export interface PhotoDeleteResult { removed: string; photo_urls: string[]; }
+
+export interface SwipeHistoryEntry {
+  swipe_id: string;
+  direction: string;
+  swiped_at: string;
+  profile: ProfileCard;
+}
+
+export interface SwipeHistoryResponse { swipes: SwipeHistoryEntry[]; total: number; }
+export interface AutocompleteResponse { names: string[]; }

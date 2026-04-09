@@ -8,6 +8,7 @@ import { MatchesComponent } from './components/matches/matches.component';
 import { ChatComponent } from './components/chat/chat.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { SettingsComponent } from './components/settings/settings.component';
+import { HistoryComponent } from './components/history/history.component';
 
 const authGuard: CanActivateFn = () => {
   const grpc = inject(GrpcClientService);
@@ -24,6 +25,8 @@ export const routes: Routes = [
   { path: 'matches', component: MatchesComponent, canActivate: [authGuard] },
   { path: 'chat/:matchId', component: ChatComponent, canActivate: [authGuard] },
   { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
+  { path: 'profile/:userId', component: ProfileComponent, canActivate: [authGuard] },
   { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
+  { path: 'history', component: HistoryComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '/discover' }
 ];

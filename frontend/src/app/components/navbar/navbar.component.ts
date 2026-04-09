@@ -20,6 +20,10 @@ import { GrpcClientService } from '../../services/grpc-client.service';
         </div>
         <span>Matches</span>
       </a>
+      <a routerLink="/history" routerLinkActive="active" class="nav-item">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21a9 9 0 000-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+        <span>History</span>
+      </a>
       <a routerLink="/profile" routerLinkActive="active" class="nav-item">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
         <span>Profile</span>
