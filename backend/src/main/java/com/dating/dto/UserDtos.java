@@ -54,7 +54,8 @@ public class UserDtos {
             UUID matchId,
             ProfileResponse profile,
             String matchedAt,
-            LastMessageDto lastMessage
+            LastMessageDto lastMessage,
+            long unreadCount
     ) {}
 
     public record LastMessageDto(String content, String sentAt, boolean fromMe) {}

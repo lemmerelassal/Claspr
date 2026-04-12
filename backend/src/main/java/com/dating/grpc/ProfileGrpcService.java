@@ -149,6 +149,8 @@ public class ProfileGrpcService extends ProfileServiceGrpc.ProfileServiceImplBas
         return switch (g) {
             case MALE -> Gender.MALE;
             case FEMALE -> Gender.FEMALE;
+            case MTF_TRANS -> Gender.OTHER;
+            case FTM_TRANS -> Gender.OTHER;
             case NON_BINARY -> Gender.NON_BINARY;
             case OTHER -> Gender.OTHER;
         };

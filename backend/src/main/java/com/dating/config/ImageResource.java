@@ -1,7 +1,7 @@
 package com.dating.config;
 
 import com.dating.entity.UserProfile;
-import com.dating.service.ImageUploadService;
+import com.dating.service.IImageService;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
@@ -33,7 +33,7 @@ import java.util.*;
 public class ImageResource {
 
     @Inject
-    ImageUploadService imageService;
+    IImageService imageService;
 
     /**
      * Upload a photo for a user profile.

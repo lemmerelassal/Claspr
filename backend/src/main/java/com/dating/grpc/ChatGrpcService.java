@@ -1,7 +1,7 @@
 package com.dating.grpc;
 
 import com.dating.entity.ChatMessageEntity;
-import com.dating.service.ChatService;
+import com.dating.service.IChatService;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.quarkus.grpc.GrpcService;
@@ -12,7 +12,7 @@ import java.util.UUID;
 public class ChatGrpcService extends ChatServiceGrpc.ChatServiceImplBase {
 
     @Inject
-    ChatService chatService;
+    IChatService chatService;
 
     @Override
     public void sendMessage(ChatMessageRequest request, StreamObserver<ChatMessageResponse> responseObserver) {

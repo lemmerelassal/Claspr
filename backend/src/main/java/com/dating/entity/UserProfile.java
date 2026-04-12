@@ -35,6 +35,13 @@ public class UserProfile extends PanacheEntityBase {
     @Enumerated(EnumType.STRING)
     public Gender genderPreference;
 
+    // Discovery filter toggles
+    public boolean showMen = true;
+    public boolean showWomen = true;
+    public boolean showMtfTrans = true;
+    public boolean showFtmTrans = true;
+    public boolean showNonBinary = true;
+
     @Column(length = 500)
     public String bio;
 
@@ -101,6 +108,6 @@ public class UserProfile extends PanacheEntityBase {
     }
 
     public enum Gender {
-        MALE, FEMALE, NON_BINARY, OTHER
+        MALE, FEMALE, MTF_TRANS, FTM_TRANS, NON_BINARY, OTHER
     }
 }
