@@ -4,7 +4,7 @@ COPY gradle/ gradle/
 COPY gradlew build.gradle settings.gradle gradle.properties ./
 RUN chmod +x gradlew && ./gradlew dependencies --no-daemon || true
 COPY src/ src/
-RUN ./gradlew build -Dquarkus.package.type=uber-jar -x test -x quarkusGenerateCode --no-daemon
+RUN ./gradlew build -Dquarkus.package.type=uber-jar -x test -x quarkusGenerateCode -x quarkusGenerateCodeDev --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
