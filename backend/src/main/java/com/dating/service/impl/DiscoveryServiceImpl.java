@@ -3,19 +3,21 @@ package com.dating.service.impl;
 import com.dating.dto.UserDtos.ProfileResponse;
 import com.dating.entity.Swipe;
 import com.dating.entity.UserProfile;
+import com.dating.service.GenderPreferenceFilter;
 import com.dating.service.IDiscoveryService;
+import com.dating.service.IGeoService;
 import com.dating.service.IProfileService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class DiscoveryServiceImpl implements IDiscoveryService {
 
-    @Inject
-    IProfileService profileService;
+    @Inject IProfileService profileService;
+    @Inject IGeoService geoService;
+    @Inject GenderPreferenceFilter genderFilter;
 
     @Override
     public List<ProfileResponse> getPotentialMatches(UUID userId, int limit) {
@@ -24,19 +26,8 @@ public class DiscoveryServiceImpl implements IDiscoveryService {
         List<UUID> alreadySwiped = Swipe.findAlreadySwipedIds(userId);
         alreadySwiped.add(userId);
 
-        // Build gender filter based on user preferences
-        List<UserProfile.Gender> allowedGenders = new java.util.ArrayList<>();
-        if (user.showMen) allowedGenders.add(UserProfile.Gender.MALE);
-        if (user.showWomen) allowedGenders.add(UserProfile.Gender.FEMALE);
-        if (user.showMtfTrans) allowedGenders.add(UserProfile.Gender.MTF_TRANS);
-        if (user.showFtmTrans) allowedGenders.add(UserProfile.Gender.FTM_TRANS);
-        if (user.showNonBinary) allowedGenders.add(UserProfile.Gender.NON_BINARY);
-        // Always include OTHER so nobody gets completely hidden
-        allowedGenders.add(UserProfile.Gender.OTHER);
-
-        if (allowedGenders.isEmpty()) {
-            return List.of();
-        }
+        List<UserProfile.Gender> allowedGenders = genderFilter.getAllowedGenders(user);
+        if (allowedGenders.isEmpty()) return List.of();
 
         List<UserProfile> candidates;
         if (alreadySwiped.size() == 1) {
@@ -53,11 +44,11 @@ public class DiscoveryServiceImpl implements IDiscoveryService {
 
         return candidates.stream()
                 .map(c -> toProfileResponse(c, user))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private ProfileResponse toProfileResponse(UserProfile profile, UserProfile viewer) {
-        double distance = profileService.calculateDistance(viewer, profile);
+        double distance = geoService.calculateDistance(viewer, profile);
         return new ProfileResponse(
                 profile.id, profile.displayName, profile.getAge(), profile.bio,
                 profile.gender, profile.photoUrls, profile.interests,

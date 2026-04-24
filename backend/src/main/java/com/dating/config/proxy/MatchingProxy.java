@@ -3,17 +3,23 @@ package com.dating.config.proxy;
 import com.dating.service.IDiscoveryService;
 import com.dating.service.IMatchService;
 import com.dating.service.ISwipeService;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.dating.config.proxy.ProfileMapper.*;
 
 @Path("/grpc/MatchingService")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class MatchingProxy {
 
     @Inject IDiscoveryService discoveryService;
@@ -25,8 +31,9 @@ public class MatchingProxy {
     public Response getPotentialMatches(Map<String, Object> body) {
         var userId = uuid(body, "user_id");
         int limit = body.containsKey("limit") ? intVal(body, "limit") : 10;
-        var profiles = discoveryService.getPotentialMatches(userId, limit);
-        var cards = profiles.stream().map(ProfileMapper::toCard).toList();
+        var cards = discoveryService.getPotentialMatches(userId, limit).stream()
+                .map(ProfileMapper::toCard)
+                .toList();
         return Response.ok(Map.of("profiles", cards)).build();
     }
 
@@ -50,8 +57,7 @@ public class MatchingProxy {
     @Path("/GetMatches")
     public Response getMatches(Map<String, Object> body) {
         var userId = uuid(body, "user_id");
-        var matches = matchService.getMatches(userId);
-        var entries = matches.stream().map(m -> {
+        var entries = matchService.getMatches(userId).stream().map(m -> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("match_id", m.matchId().toString());
             entry.put("matched_at", m.matchedAt());

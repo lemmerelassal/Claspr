@@ -14,6 +14,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.jboss.resteasy.reactive.RestForm;
 
@@ -30,6 +31,7 @@ import java.util.*;
  * to the user's profile via the gRPC ProfileService.UpdateProfile RPC.
  */
 @Path("/uploads")
+@RunOnVirtualThread
 public class ImageResource {
 
     @Inject

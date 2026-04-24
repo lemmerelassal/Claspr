@@ -6,6 +6,7 @@ import com.dating.entity.Match;
 import com.dating.entity.Swipe;
 import com.dating.entity.Swipe.SwipeDirection;
 import com.dating.entity.UserProfile;
+import com.dating.service.IGeoService;
 import com.dating.service.IProfileService;
 import com.dating.service.ISwipeService;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -16,8 +17,8 @@ import java.util.UUID;
 @ApplicationScoped
 public class SwipeServiceImpl implements ISwipeService {
 
-    @Inject
-    IProfileService profileService;
+    @Inject IProfileService profileService;
+    @Inject IGeoService geoService;
 
     @Override
     @Transactional
@@ -25,7 +26,6 @@ public class SwipeServiceImpl implements ISwipeService {
         UserProfile swiper = profileService.getById(swiperId);
         UserProfile swiped = profileService.getById(swipedId);
 
-        // Prevent duplicate swipes
         if (Swipe.findBySwipedPair(swiperId, swipedId) != null) {
             return new SwipeResponse(false, null, null);
         }
@@ -36,26 +36,34 @@ public class SwipeServiceImpl implements ISwipeService {
         swipe.direction = SwipeDirection.valueOf(direction.toUpperCase());
         swipe.persist();
 
-        // Check mutual match on RIGHT or SUPER_LIKE
-        if (swipe.direction == SwipeDirection.RIGHT || swipe.direction == SwipeDirection.SUPER_LIKE) {
-            Swipe reciprocal = Swipe.findBySwipedPair(swipedId, swiperId);
-            if (reciprocal != null &&
-                    (reciprocal.direction == SwipeDirection.RIGHT || reciprocal.direction == SwipeDirection.SUPER_LIKE)) {
-                var match = new Match();
-                match.user1 = swiper;
-                match.user2 = swiped;
-                match.persist();
+        return switch (swipe.direction) {
+            case RIGHT, SUPER_LIKE -> checkMutualMatch(swiper, swiped, swipedId, swiperId);
+            case LEFT -> new SwipeResponse(false, null, null);
+        };
+    }
 
-                double distance = profileService.calculateDistance(swiper, swiped);
-                var profile = new ProfileResponse(
-                        swiped.id, swiped.displayName, swiped.getAge(), swiped.bio,
-                        swiped.gender, swiped.photoUrls, swiped.interests,
-                        swiped.city, Math.round(distance * 10.0) / 10.0
-                );
-                return new SwipeResponse(true, match.id, profile);
-            }
-        }
+    private SwipeResponse checkMutualMatch(UserProfile swiper, UserProfile swiped,
+                                           UUID swipedId, UUID swiperId) {
+        Swipe reciprocal = Swipe.findBySwipedPair(swipedId, swiperId);
+        if (reciprocal == null) return new SwipeResponse(false, null, null);
+        return switch (reciprocal.direction) {
+            case RIGHT, SUPER_LIKE -> createMatch(swiper, swiped);
+            case LEFT -> new SwipeResponse(false, null, null);
+        };
+    }
 
-        return new SwipeResponse(false, null, null);
+    private SwipeResponse createMatch(UserProfile swiper, UserProfile swiped) {
+        var match = new Match();
+        match.user1 = swiper;
+        match.user2 = swiped;
+        match.persist();
+
+        double distance = geoService.calculateDistance(swiper, swiped);
+        var profile = new ProfileResponse(
+                swiped.id, swiped.displayName, swiped.getAge(), swiped.bio,
+                swiped.gender, swiped.photoUrls, swiped.interests,
+                swiped.city, Math.round(distance * 10.0) / 10.0
+        );
+        return new SwipeResponse(true, match.id, profile);
     }
 }

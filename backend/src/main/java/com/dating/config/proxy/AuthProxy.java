@@ -2,8 +2,12 @@ package com.dating.config.proxy;
 
 import com.dating.entity.UserProfile;
 import com.dating.service.IAuthService;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
@@ -11,6 +15,7 @@ import java.util.Map;
 @Path("/grpc/AuthService")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class AuthProxy {
 
     @Inject
@@ -39,8 +44,9 @@ public class AuthProxy {
     public Response register(Map<String, Object> body) {
         try {
             String genderStr = ProfileMapper.str(body, "gender");
-            UserProfile.Gender gender = genderStr != null && !genderStr.isEmpty()
-                    ? UserProfile.Gender.valueOf(genderStr) : UserProfile.Gender.OTHER;
+            UserProfile.Gender gender = genderStr.isBlank()
+                    ? UserProfile.Gender.OTHER
+                    : UserProfile.Gender.valueOf(genderStr);
 
             var result = authService.register(
                     ProfileMapper.str(body, "email"),

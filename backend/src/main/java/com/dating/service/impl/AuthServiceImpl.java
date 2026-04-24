@@ -2,10 +2,11 @@ package com.dating.service.impl;
 
 import com.dating.entity.UserProfile;
 import com.dating.service.IAuthService;
+import com.dating.service.PasswordEncoder;
 import io.smallrye.jwt.build.Jwt;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Base64;
@@ -14,6 +15,9 @@ import java.util.Set;
 @ApplicationScoped
 public class AuthServiceImpl implements IAuthService {
 
+    @Inject
+    PasswordEncoder passwordEncoder;
+
     @Override
     @Transactional
     public AuthResult register(String email, String password, String displayName,
@@ -21,24 +25,22 @@ public class AuthServiceImpl implements IAuthService {
         if (UserProfile.findByEmail(email) != null) {
             throw new IllegalArgumentException("Email already registered");
         }
-
         var user = new UserProfile();
         user.email = email;
-        user.passwordHash = hashPassword(password);
+        user.passwordHash = passwordEncoder.encode(password);
         user.displayName = displayName;
-        if (dateOfBirth != null && !dateOfBirth.isEmpty()) {
+        if (dateOfBirth != null && !dateOfBirth.isBlank()) {
             user.dateOfBirth = LocalDate.parse(dateOfBirth);
         }
         user.gender = gender;
         user.persist();
-
         return new AuthResult(generateToken(user), user.id, user.displayName);
     }
 
     @Override
     public AuthResult login(String email, String password) {
         UserProfile user = UserProfile.findByEmail(email);
-        if (user == null || !verifyPassword(password, user.passwordHash)) {
+        if (user == null || !passwordEncoder.matches(password, user.passwordHash)) {
             throw new SecurityException("Invalid credentials");
         }
         return new AuthResult(generateToken(user), user.id, user.displayName);
@@ -66,20 +68,6 @@ public class AuthServiceImpl implements IAuthService {
                 .claim("displayName", user.displayName)
                 .expiresIn(Duration.ofDays(7))
                 .sign();
-    }
-
-    private String hashPassword(String password) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(password.getBytes());
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to hash password", e);
-        }
-    }
-
-    private boolean verifyPassword(String password, String hash) {
-        return hashPassword(password).equals(hash);
     }
 
     private String extractJsonField(String json, String field) {

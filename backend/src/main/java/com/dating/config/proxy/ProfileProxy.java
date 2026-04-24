@@ -1,8 +1,13 @@
 package com.dating.config.proxy;
 
+import com.dating.service.IGeoService;
 import com.dating.service.IProfileService;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
@@ -12,10 +17,11 @@ import static com.dating.config.proxy.ProfileMapper.*;
 @Path("/grpc/ProfileService")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class ProfileProxy {
 
-    @Inject
-    IProfileService profileService;
+    @Inject IProfileService profileService;
+    @Inject IGeoService geoService;
 
     @POST
     @Path("/GetMyProfile")
@@ -34,7 +40,7 @@ public class ProfileProxy {
         try {
             var target = profileService.getById(uuid(body, "target_user_id"));
             var viewer = profileService.getById(uuid(body, "user_id"));
-            double dist = profileService.calculateDistance(viewer, target);
+            double dist = geoService.calculateDistance(viewer, target);
             return Response.ok(ProfileMapper.toMap(target, dist)).build();
         } catch (IllegalArgumentException e) {
             return Response.status(404).entity(Map.of("message", "Not found")).build();

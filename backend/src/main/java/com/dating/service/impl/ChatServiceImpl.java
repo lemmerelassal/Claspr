@@ -3,7 +3,6 @@ package com.dating.service.impl;
 import com.dating.dto.UserDtos.MessageResponse;
 import com.dating.entity.ChatMessageEntity;
 import com.dating.entity.Match;
-import com.dating.entity.UserProfile;
 import com.dating.service.IChatService;
 import com.dating.service.IProfileService;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -11,7 +10,6 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class ChatServiceImpl implements IChatService {
@@ -34,15 +32,12 @@ public class ChatServiceImpl implements IChatService {
         msg.match = match;
         msg.sender = profileService.getById(senderId);
         msg.content = content;
-        msg.messageType = type != null
+        msg.messageType = type != null && !type.isBlank()
                 ? ChatMessageEntity.MessageType.valueOf(type.toUpperCase())
                 : ChatMessageEntity.MessageType.TEXT;
         msg.persist();
 
-        return new MessageResponse(
-                msg.id, msg.sender.id, msg.content,
-                msg.messageType.name(), msg.sentAt.toString(), msg.read
-        );
+        return toResponse(msg);
     }
 
     @Override
@@ -52,14 +47,9 @@ public class ChatServiceImpl implements IChatService {
         if (!match.user1.id.equals(userId) && !match.user2.id.equals(userId)) {
             throw new SecurityException("Not part of this match");
         }
-
-        return ChatMessageEntity.findByMatchId(matchId, page, size)
-                .stream()
-                .map(m -> new MessageResponse(
-                        m.id, m.sender.id, m.content,
-                        m.messageType.name(), m.sentAt.toString(), m.read
-                ))
-                .collect(Collectors.toList());
+        return ChatMessageEntity.findByMatchId(matchId, page, size).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override
@@ -68,6 +58,13 @@ public class ChatServiceImpl implements IChatService {
         ChatMessageEntity.update(
                 "read = true WHERE match.id = ?1 AND sender.id != ?2 AND read = false",
                 matchId, userId
+        );
+    }
+
+    private MessageResponse toResponse(ChatMessageEntity m) {
+        return new MessageResponse(
+                m.id, m.sender.id, m.content,
+                m.messageType.name(), m.sentAt.toString(), m.read
         );
     }
 }

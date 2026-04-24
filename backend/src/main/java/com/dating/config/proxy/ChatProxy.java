@@ -1,8 +1,12 @@
 package com.dating.config.proxy;
 
 import com.dating.service.IChatService;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
@@ -12,6 +16,7 @@ import static com.dating.config.proxy.ProfileMapper.*;
 @Path("/grpc/ChatService")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RunOnVirtualThread
 public class ChatProxy {
 
     @Inject
